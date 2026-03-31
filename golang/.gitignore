@@ -1,0 +1,2 @@
+# Pre-built static libraries are intentionally committed for go get compatibility.
+# Do NOT ignore shared/lib/ or shared/include/.

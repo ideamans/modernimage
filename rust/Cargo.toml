@@ -1,0 +1,23 @@
+[package]
+name = "modernimage"
+version = "0.2.0"
+edition = "2021"
+authors = ["Ideamans <info@ideamans.com>"]
+description = "WebP and AVIF image encoding via libmodernimage"
+license = "MIT"
+
+[lib]
+name = "modernimage"
+path = "src/lib.rs"
+
+[[bin]]
+name = "modernimage"
+path = "src/bin/modernimage.rs"
+
+[dependencies]
+thiserror = "1.0"
+tempfile = "3.10"
+clap = { version = "4", features = ["derive"] }
+
+[build-dependencies]
+dirs = "5.0"

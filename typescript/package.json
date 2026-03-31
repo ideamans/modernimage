@@ -1,0 +1,23 @@
+{
+  "name": "modernimage",
+  "version": "0.2.0",
+  "description": "TypeScript/Node.js bindings for libmodernimage - WebP and AVIF image encoding",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  },
+  "author": "Ideamans",
+  "license": "MIT",
+  "dependencies": {
+    "koffi": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

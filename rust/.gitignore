@@ -1,0 +1,5 @@
+target/
+
+# Static libraries downloaded by setup.sh
+lib/*/libmodernimage.a
+modernimage.h
