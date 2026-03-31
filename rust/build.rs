@@ -102,7 +102,11 @@ fn main() {
             println!("cargo:rustc-link-lib=pthread");
         }
         "windows" => {
-            println!("cargo:rustc-link-lib=stdc++");
+            // MSVC uses msvcrt (no stdc++); MinGW uses stdc++
+            let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+            if target_env == "gnu" {
+                println!("cargo:rustc-link-lib=stdc++");
+            }
             println!("cargo:rustc-link-lib=ws2_32");
         }
         _ => {}

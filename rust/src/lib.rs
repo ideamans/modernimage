@@ -4,7 +4,7 @@ pub mod ffi;
 use error::ModernImageError;
 use std::ffi::{CStr, CString};
 use std::fs;
-use std::os::raw::c_void;
+use std::os::raw::{c_char, c_void};
 
 pub type Result<T> = std::result::Result<T, ModernImageError>;
 
@@ -74,7 +74,7 @@ fn call_tool(tool: Tool, input_data: &[u8], argv: &[&str], use_stdin: bool) -> R
         .iter()
         .map(|s| CString::new(*s).unwrap())
         .collect();
-    let c_argv: Vec<*const i8> = c_args.iter().map(|s| s.as_ptr()).collect();
+    let c_argv: Vec<*const c_char> = c_args.iter().map(|s| s.as_ptr()).collect();
 
     let rc = unsafe {
         let argc = c_argv.len() as i32;
@@ -91,7 +91,7 @@ fn call_tool(tool: Tool, input_data: &[u8], argv: &[&str], use_stdin: bool) -> R
         let message = if stderr_size > 0 {
             let mut buf = vec![0u8; stderr_size];
             unsafe {
-                ffi::modernimage_copy_stderr(ctx.ptr, buf.as_mut_ptr() as *mut i8, stderr_size);
+                ffi::modernimage_copy_stderr(ctx.ptr, buf.as_mut_ptr() as *mut c_char, stderr_size);
             }
             String::from_utf8_lossy(&buf).to_string()
         } else {
