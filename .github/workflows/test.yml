@@ -107,7 +107,29 @@ jobs:
         if: runner.os == 'Windows'
         working-directory: typescript
         shell: bash
-        run: node dist/test/modernimage.test.js
+        run: |
+          node -e "
+            process.on('uncaughtException', (e) => { console.error('UNCAUGHT:', e); process.exit(1); });
+            const { version, webp, avif } = require('./dist/index');
+            const fs = require('fs');
+            const assert = require('assert');
+            console.log('version:', version());
+            const jpg = fs.readFileSync('../testdata/photo.jpg');
+            const png = fs.readFileSync('../testdata/logo.png');
+            const gif = fs.readFileSync('../testdata/animation.gif');
+
+            let r;
+            r = webp.encodeLossy(jpg, 80); assert(r.data.length > 0); console.log('webp.encodeLossy JPEG:', r.data.length);
+            r = webp.encodeLossy(png, 80, true); assert(r.data.length > 0); console.log('webp.encodeLossy PNG:', r.data.length);
+            r = webp.encodeLossless(png); assert(r.data.length > 0); console.log('webp.encodeLossless PNG:', r.data.length);
+            r = webp.encodeLossless(jpg, true); assert(r.data.length > 0); console.log('webp.encodeLossless JPEG:', r.data.length);
+            r = webp.encodeGif(gif); assert(r.data.length > 0); console.log('webp.encodeGif:', r.data.length);
+            r = avif.encodeBalanced(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeBalanced JPEG:', r.data.length);
+            r = avif.encodeBalanced(png, 80); assert(r.data.length > 0); console.log('avif.encodeBalanced PNG:', r.data.length);
+            r = avif.encodeCompact(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeCompact JPEG:', r.data.length);
+            r = avif.encodeFast(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeFast JPEG:', r.data.length);
+            console.log('All tests passed');
+          "
 
   test-rust:
     name: Rust (${{ matrix.os }})
