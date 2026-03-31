@@ -6,13 +6,11 @@ on:
   pull_request:
     branches: [main, develop]
 
-# Cancel in-progress runs for the same branch
 concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Determine which OS matrix to run based on the branch
   setup:
     name: Setup matrix
     runs-on: ubuntu-latest
@@ -44,7 +42,6 @@ jobs:
           cache: true
           cache-dependency-path: golang/go.sum
 
-      # libmodernimage Windows build uses MSYS2 UCRT64
       - name: Setup MSYS2 UCRT64 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -59,16 +56,18 @@ jobs:
 
       - name: Run Go tests (Windows)
         if: runner.os == 'Windows'
-        working-directory: golang
         shell: msys2 {0}
         run: |
-          export PATH="/ucrt64/bin:$(cygpath "$GOROOT")/bin:$PATH"
+          export PATH="/ucrt64/bin:$PATH"
+          # Find go binary installed by setup-go
+          GO_BIN=$(find /c/hostedtoolcache/windows/go -name "go.exe" -path "*/bin/go.exe" 2>/dev/null | head -1)
+          GO_DIR=$(dirname "$GO_BIN")
+          export PATH="$GO_DIR:$PATH"
           export CC=gcc
           export CXX=g++
           export CGO_ENABLED=1
+          cd golang
           go test -v -timeout 120s
-        env:
-          GOROOT: ${{ env.GOROOT }}
 
   test-typescript:
     name: TypeScript (${{ matrix.os }})
@@ -93,9 +92,11 @@ jobs:
 
       - name: Install and test
         working-directory: typescript
+        shell: bash
         run: |
           npm install
-          npm test
+          npm run build
+          node --test dist/test/*.test.js
 
   test-rust:
     name: Rust (${{ matrix.os }})
@@ -122,7 +123,6 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
 
-      # libmodernimage Windows build uses MSYS2 UCRT64
       - name: Setup MSYS2 UCRT64 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -141,11 +141,14 @@ jobs:
 
       - name: Run Rust tests (Windows)
         if: runner.os == 'Windows'
-        working-directory: rust
         shell: msys2 {0}
         run: |
           export PATH="/ucrt64/bin:$PATH"
-          ~/.cargo/bin/cargo test --target x86_64-pc-windows-gnu
+          CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
+          CARGO_DIR=$(dirname "$CARGO_BIN")
+          export PATH="$CARGO_DIR:$PATH"
+          cd rust
+          cargo test --target x86_64-pc-windows-gnu
 
       - name: Build CLI (Unix)
         if: runner.os != 'Windows'
@@ -154,8 +157,11 @@ jobs:
 
       - name: Build CLI (Windows)
         if: runner.os == 'Windows'
-        working-directory: rust
         shell: msys2 {0}
         run: |
           export PATH="/ucrt64/bin:$PATH"
-          ~/.cargo/bin/cargo build --release --target x86_64-pc-windows-gnu
+          CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
+          CARGO_DIR=$(dirname "$CARGO_BIN")
+          export PATH="$CARGO_DIR:$PATH"
+          cd rust
+          cargo build --release --target x86_64-pc-windows-gnu
