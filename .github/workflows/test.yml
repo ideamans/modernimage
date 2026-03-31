@@ -2,24 +2,47 @@ name: Test
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, windows]
   pull_request:
     branches: [main, develop]
 
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Determine which OS matrix to run based on the branch
+  setup:
+    name: Setup matrix
+    runs-on: ubuntu-latest
+    outputs:
+      os-matrix: ${{ steps.set-matrix.outputs.os-matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          if [[ "${{ github.ref_name }}" == "windows" ]]; then
+            echo 'os-matrix=["windows-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os-matrix=["ubuntu-latest","macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
   test-go:
     name: Go (${{ matrix.os }})
+    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
+          cache-dependency-path: golang/go.sum
 
       # libmodernimage Windows build uses MSYS2 UCRT64
       - name: Setup MSYS2 UCRT64 (Windows)
@@ -49,17 +72,20 @@ jobs:
 
   test-typescript:
     name: TypeScript (${{ matrix.os }})
+    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
 
       - name: Download libmodernimage shared library
         shell: bash
@@ -73,17 +99,28 @@ jobs:
 
   test-rust:
     name: Rust (${{ matrix.os }})
+    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
 
       # libmodernimage Windows build uses MSYS2 UCRT64
       - name: Setup MSYS2 UCRT64 (Windows)
