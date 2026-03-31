@@ -55,6 +55,8 @@ jobs:
       - name: Build release binary
         working-directory: rust
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          MODERNIMAGE_VERSION: ${{ github.ref_name }}
 
       - name: Package (Unix)
         if: runner.os != 'Windows'

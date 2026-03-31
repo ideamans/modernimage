@@ -5,7 +5,11 @@ use std::io::{self, Read, Write};
 use std::process;
 
 #[derive(Parser)]
-#[command(name = "modernimage", version, about = "WebP and AVIF image encoding")]
+#[command(
+    name = "modernimage",
+    version = option_env!("MODERNIMAGE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
+    about = "WebP and AVIF image encoding"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
