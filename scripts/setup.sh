@@ -77,7 +77,7 @@ cp "${SRC}/libmodernimage.a" "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
 echo "Installing for TypeScript binding..."
 case "$(uname -s)" in
   Darwin)              SHARED_LIB="libmodernimage.dylib" ;;
-  MINGW*|MSYS*|CYGWIN*) SHARED_LIB="modernimage.dll" ;;
+  MINGW*|MSYS*|CYGWIN*) SHARED_LIB="libmodernimage.dll" ;;
   *)                   SHARED_LIB="libmodernimage.so" ;;
 esac
 mkdir -p "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}"

@@ -20,7 +20,7 @@ export function getLibraryFileName(): string {
   const platform = process.platform
   if (platform === 'darwin') return 'libmodernimage.dylib'
   if (platform === 'linux') return 'libmodernimage.so'
-  if (platform === 'win32') return 'modernimage.dll'
+  if (platform === 'win32') return 'libmodernimage.dll'
   throw new Error(`Unsupported platform: ${platform}`)
 }
 
