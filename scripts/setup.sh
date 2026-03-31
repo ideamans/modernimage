@@ -18,9 +18,10 @@ detect_release_platform() {
   arch="$(uname -m)"
 
   case "$os" in
-    darwin) os="darwin" ;;
-    linux)  os="linux" ;;
-    *)      echo "Unsupported OS: $os" >&2; exit 1 ;;
+    darwin)  os="darwin" ;;
+    linux)   os="linux" ;;
+    mingw*|msys*|cygwin*) os="windows" ;;
+    *)       echo "Unsupported OS: $os" >&2; exit 1 ;;
   esac
 
   case "$arch" in
@@ -39,6 +40,10 @@ detect_go_platform() {
   local os arch
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
+
+  case "$os" in
+    mingw*|msys*|cygwin*) os="windows" ;;
+  esac
 
   case "$arch" in
     arm64|aarch64) arch="arm64" ;;
@@ -68,13 +73,13 @@ mkdir -p "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}"
 cp "${SRC}/modernimage.h" "${PROJECT_DIR}/golang/shared/include/"
 cp "${SRC}/libmodernimage.a" "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
 
-# TypeScript binding: lib/{release-platform}/ (shared library)
+# TypeScript binding: lib/{go-platform}/ (shared library)
 echo "Installing for TypeScript binding..."
-if [ "$(uname -s)" = "Darwin" ]; then
-  SHARED_LIB="libmodernimage.dylib"
-else
-  SHARED_LIB="libmodernimage.so"
-fi
+case "$(uname -s)" in
+  Darwin)              SHARED_LIB="libmodernimage.dylib" ;;
+  MINGW*|MSYS*|CYGWIN*) SHARED_LIB="modernimage.dll" ;;
+  *)                   SHARED_LIB="libmodernimage.so" ;;
+esac
 mkdir -p "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}"
 cp "${SRC}/${SHARED_LIB}" "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}/"
 

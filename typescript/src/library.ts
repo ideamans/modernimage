@@ -9,6 +9,8 @@ export function getPlatform(): string {
     return arch === 'arm64' ? 'darwin-arm64' : 'darwin-amd64'
   } else if (platform === 'linux') {
     return arch === 'arm64' ? 'linux-arm64' : 'linux-amd64'
+  } else if (platform === 'win32') {
+    return 'windows-amd64'
   }
 
   throw new Error(`Unsupported platform: ${platform}-${arch}`)
@@ -18,6 +20,7 @@ export function getLibraryFileName(): string {
   const platform = process.platform
   if (platform === 'darwin') return 'libmodernimage.dylib'
   if (platform === 'linux') return 'libmodernimage.so'
+  if (platform === 'win32') return 'modernimage.dll'
   throw new Error(`Unsupported platform: ${platform}`)
 }
 
