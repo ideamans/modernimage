@@ -1,6 +1,6 @@
 LIBMODERNIMAGE_VERSION ?= 0.2.0
 
-.PHONY: setup test-go test-typescript test-rust test-all clean
+.PHONY: setup test-go test-typescript test-rust test-all clean release
 
 setup:
 	./scripts/setup.sh $(LIBMODERNIMAGE_VERSION)
@@ -15,6 +15,9 @@ test-rust:
 	cd rust && cargo test
 
 test-all: test-go test-typescript test-rust
+
+release:
+	./scripts/release.sh
 
 clean:
 	rm -rf golang/shared/lib/*/libmodernimage.a
