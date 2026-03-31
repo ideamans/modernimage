@@ -97,31 +97,17 @@ jobs:
           npm install
           npm run build
 
-      - name: Debug encode (Windows only)
-        if: runner.os == 'Windows'
-        working-directory: typescript
-        shell: bash
-        run: |
-          node -e "
-            const { version, webp } = require('./dist/index');
-            console.log('version:', version());
-            try {
-              const fs = require('fs');
-              const data = fs.readFileSync('../testdata/photo.jpg');
-              console.log('input size:', data.length);
-              const result = webp.encodeLossy(data, 80);
-              console.log('output size:', result.data.length, 'mime:', result.mimeType);
-            } catch(e) {
-              console.error('ENCODE ERROR:', e.message);
-              console.error(e.stack);
-              process.exit(1);
-            }
-          "
-
-      - name: Run tests
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
         working-directory: typescript
         shell: bash
         run: node --test dist/test/*.test.js
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        working-directory: typescript
+        shell: bash
+        run: node dist/test/modernimage.test.js
 
   test-rust:
     name: Rust (${{ matrix.os }})
