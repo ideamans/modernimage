@@ -12,7 +12,6 @@ package modernimage
 #cgo linux,arm64 LDFLAGS: ${SRCDIR}/shared/lib/linux-arm64/libmodernimage.a
 #cgo windows,amd64 LDFLAGS: ${SRCDIR}/shared/lib/windows-amd64/libmodernimage.a
 
-// Only C++ stdlib, pthread, and math are needed as system libraries.
 #cgo darwin LDFLAGS: -lc++ -lpthread -lm
 #cgo linux LDFLAGS: -lstdc++ -lpthread -lm
 #cgo windows LDFLAGS: -lstdc++ -lws2_32
