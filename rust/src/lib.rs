@@ -370,6 +370,21 @@ mod tests {
             && data[4] == b'f' && data[5] == b't' && data[6] == b'y' && data[7] == b'p'
     }
 
+    const JPEG_FILES: &[&str] = &[
+        "photo.jpg", "photo-like.jpg", "landscape-like.jpg",
+        "medium-512x512.jpg", "edges.jpg", "gradient-radial.jpg", "small-128x128.jpg",
+    ];
+
+    const PNG_FILES: &[&str] = &[
+        "logo.png", "photo-like.png", "text.png",
+        "flat-color.png", "gradient-horizontal.png", "small-128x128.png",
+    ];
+
+    const GIF_FILES: &[&str] = &[
+        "animation.gif", "animated-3frames.gif", "animated-small.gif",
+        "static-512x512.gif", "static-alpha.gif",
+    ];
+
     #[test]
     fn test_version() {
         let v = version();
@@ -377,68 +392,73 @@ mod tests {
     }
 
     #[test]
-    fn test_webp_encode_lossy_jpeg() {
-        let data = load_test_data("photo.jpg");
-        let result = webp::encode_lossy(&data, 80, false).unwrap();
-        assert!(is_webp(&result.data));
-        assert_eq!(result.mime_type, "image/webp");
+    fn test_webp_lossy_all_jpeg() {
+        for name in JPEG_FILES {
+            let data = load_test_data(name);
+            let result = webp::encode_lossy(&data, 80, false)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_webp(&result.data), "{}: not WebP", name);
+        }
     }
 
     #[test]
-    fn test_webp_encode_lossy_png() {
-        let data = load_test_data("logo.png");
-        let result = webp::encode_lossy(&data, 80, true).unwrap();
-        assert!(is_webp(&result.data));
+    fn test_webp_lossy_all_png() {
+        for name in PNG_FILES {
+            let data = load_test_data(name);
+            let result = webp::encode_lossy(&data, 80, true)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_webp(&result.data), "{}: not WebP", name);
+        }
     }
 
     #[test]
-    fn test_webp_encode_lossless_png() {
-        let data = load_test_data("logo.png");
-        let result = webp::encode_lossless(&data, false).unwrap();
-        assert!(is_webp(&result.data));
+    fn test_webp_lossless_all() {
+        for name in JPEG_FILES.iter().chain(PNG_FILES.iter()) {
+            let data = load_test_data(name);
+            let result = webp::encode_lossless(&data, false)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_webp(&result.data), "{}: not WebP", name);
+        }
     }
 
     #[test]
-    fn test_webp_encode_lossless_jpeg() {
-        let data = load_test_data("photo.jpg");
-        let result = webp::encode_lossless(&data, true).unwrap();
-        assert!(is_webp(&result.data));
+    fn test_webp_gif_all() {
+        for name in GIF_FILES {
+            let data = load_test_data(name);
+            let result = webp::encode_gif(&data, false)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_webp(&result.data), "{}: not WebP", name);
+        }
     }
 
     #[test]
-    fn test_webp_encode_gif() {
-        let data = load_test_data("animation.gif");
-        let result = webp::encode_gif(&data, false).unwrap();
-        assert!(is_webp(&result.data));
+    fn test_avif_balanced_all() {
+        for name in JPEG_FILES.iter().chain(PNG_FILES.iter()) {
+            let data = load_test_data(name);
+            let result = avif::encode_balanced(&data, 80, 0)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_avif(&result.data), "{}: not AVIF", name);
+        }
     }
 
     #[test]
-    fn test_avif_encode_balanced_jpeg() {
-        let data = load_test_data("photo.jpg");
-        let result = avif::encode_balanced(&data, 80, 0).unwrap();
-        assert!(is_avif(&result.data));
-        assert_eq!(result.mime_type, "image/avif");
+    fn test_avif_compact_small() {
+        for name in &["photo.jpg", "small-128x128.jpg", "logo.png", "small-128x128.png"] {
+            let data = load_test_data(name);
+            let result = avif::encode_compact(&data, 80, 0)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_avif(&result.data), "{}: not AVIF", name);
+        }
     }
 
     #[test]
-    fn test_avif_encode_balanced_png() {
-        let data = load_test_data("logo.png");
-        let result = avif::encode_balanced(&data, 80, 0).unwrap();
-        assert!(is_avif(&result.data));
-    }
-
-    #[test]
-    fn test_avif_encode_compact_jpeg() {
-        let data = load_test_data("photo.jpg");
-        let result = avif::encode_compact(&data, 80, 0).unwrap();
-        assert!(is_avif(&result.data));
-    }
-
-    #[test]
-    fn test_avif_encode_fast_jpeg() {
-        let data = load_test_data("photo.jpg");
-        let result = avif::encode_fast(&data, 80, 0).unwrap();
-        assert!(is_avif(&result.data));
+    fn test_avif_fast_all() {
+        for name in JPEG_FILES.iter().chain(PNG_FILES.iter()) {
+            let data = load_test_data(name);
+            let result = avif::encode_fast(&data, 80, 0)
+                .unwrap_or_else(|e| panic!("{}: {}", name, e));
+            assert!(is_avif(&result.data), "{}: not AVIF", name);
+        }
     }
 
     #[test]

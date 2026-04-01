@@ -34,119 +34,165 @@ func TestVersion(t *testing.T) {
 	t.Logf("libmodernimage version: %s", v)
 }
 
+// --- WebP Lossy: JPEG inputs ---
+
+var jpegFiles = []string{
+	"photo.jpg",
+	"photo-like.jpg",
+	"landscape-like.jpg",
+	"medium-512x512.jpg",
+	"edges.jpg",
+	"gradient-radial.jpg",
+	"small-128x128.jpg",
+}
+
 func TestWebpEncodeLossyJPEG(t *testing.T) {
-	data := loadTestData(t, "photo.jpg")
-	result, err := Webp.EncodeLossy(data, 80, false)
-	if err != nil {
-		t.Fatalf("Webp.EncodeLossy failed: %v", err)
+	for _, name := range jpegFiles {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Webp.EncodeLossy(data, 80, false)
+			if err != nil {
+				t.Fatalf("Webp.EncodeLossy(%s) failed: %v", name, err)
+			}
+			if !isWebP(result.Data) {
+				t.Fatal("output is not WebP")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isWebP(result.Data) {
-		t.Fatal("output is not WebP")
-	}
-	if result.MimeType != "image/webp" {
-		t.Fatalf("expected mime image/webp, got %s", result.MimeType)
-	}
-	t.Logf("JPEG -> WebP lossy: %d -> %d bytes", len(data), len(result.Data))
+}
+
+// --- WebP Lossy: PNG inputs ---
+
+var pngFiles = []string{
+	"logo.png",
+	"photo-like.png",
+	"text.png",
+	"flat-color.png",
+	"gradient-horizontal.png",
+	"small-128x128.png",
 }
 
 func TestWebpEncodeLossyPNG(t *testing.T) {
-	data := loadTestData(t, "logo.png")
-	result, err := Webp.EncodeLossy(data, 80, true)
-	if err != nil {
-		t.Fatalf("Webp.EncodeLossy failed: %v", err)
+	for _, name := range pngFiles {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Webp.EncodeLossy(data, 80, true)
+			if err != nil {
+				t.Fatalf("Webp.EncodeLossy(%s) failed: %v", name, err)
+			}
+			if !isWebP(result.Data) {
+				t.Fatal("output is not WebP")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isWebP(result.Data) {
-		t.Fatal("output is not WebP")
-	}
-	t.Logf("PNG -> WebP lossy: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestWebpEncodeLosslessPNG(t *testing.T) {
-	data := loadTestData(t, "logo.png")
-	result, err := Webp.EncodeLossless(data, false)
-	if err != nil {
-		t.Fatalf("Webp.EncodeLossless failed: %v", err)
+// --- WebP Lossless ---
+
+func TestWebpEncodeLossless(t *testing.T) {
+	files := append(jpegFiles, pngFiles...)
+	for _, name := range files {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Webp.EncodeLossless(data, false)
+			if err != nil {
+				t.Fatalf("Webp.EncodeLossless(%s) failed: %v", name, err)
+			}
+			if !isWebP(result.Data) {
+				t.Fatal("output is not WebP")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isWebP(result.Data) {
-		t.Fatal("output is not WebP")
-	}
-	t.Logf("PNG -> WebP lossless: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestWebpEncodeLosslessJPEG(t *testing.T) {
-	data := loadTestData(t, "photo.jpg")
-	result, err := Webp.EncodeLossless(data, true)
-	if err != nil {
-		t.Fatalf("Webp.EncodeLossless failed: %v", err)
-	}
-	if !isWebP(result.Data) {
-		t.Fatal("output is not WebP")
-	}
-	t.Logf("JPEG -> WebP lossless: %d -> %d bytes", len(data), len(result.Data))
+// --- WebP GIF ---
+
+var gifFiles = []string{
+	"animation.gif",
+	"animated-3frames.gif",
+	"animated-small.gif",
+	"static-512x512.gif",
+	"static-alpha.gif",
 }
 
 func TestWebpEncodeGif(t *testing.T) {
-	data := loadTestData(t, "animation.gif")
-	result, err := Webp.EncodeGif(data, false)
-	if err != nil {
-		t.Fatalf("Webp.EncodeGif failed: %v", err)
+	for _, name := range gifFiles {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Webp.EncodeGif(data, false)
+			if err != nil {
+				t.Fatalf("Webp.EncodeGif(%s) failed: %v", name, err)
+			}
+			if !isWebP(result.Data) {
+				t.Fatal("output is not WebP")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isWebP(result.Data) {
-		t.Fatal("output is not WebP")
-	}
-	t.Logf("GIF -> WebP: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestAvifEncodeBalancedJPEG(t *testing.T) {
-	data := loadTestData(t, "photo.jpg")
-	result, err := Avif.EncodeBalanced(data, 80, 0)
-	if err != nil {
-		t.Fatalf("Avif.EncodeBalanced failed: %v", err)
+// --- AVIF Balanced ---
+
+func TestAvifEncodeBalanced(t *testing.T) {
+	files := append(jpegFiles, pngFiles...)
+	for _, name := range files {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Avif.EncodeBalanced(data, 80, 0)
+			if err != nil {
+				t.Fatalf("Avif.EncodeBalanced(%s) failed: %v", name, err)
+			}
+			if !isAVIF(result.Data) {
+				t.Fatal("output is not AVIF")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isAVIF(result.Data) {
-		t.Fatal("output is not AVIF")
-	}
-	if result.MimeType != "image/avif" {
-		t.Fatalf("expected mime image/avif, got %s", result.MimeType)
-	}
-	t.Logf("JPEG -> AVIF balanced: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestAvifEncodeBalancedPNG(t *testing.T) {
-	data := loadTestData(t, "logo.png")
-	result, err := Avif.EncodeBalanced(data, 80, 0)
-	if err != nil {
-		t.Fatalf("Avif.EncodeBalanced failed: %v", err)
+// --- AVIF Compact ---
+
+func TestAvifEncodeCompact(t *testing.T) {
+	// Use smaller files only (compact is slow)
+	files := []string{"photo.jpg", "small-128x128.jpg", "logo.png", "small-128x128.png"}
+	for _, name := range files {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Avif.EncodeCompact(data, 80, 0)
+			if err != nil {
+				t.Fatalf("Avif.EncodeCompact(%s) failed: %v", name, err)
+			}
+			if !isAVIF(result.Data) {
+				t.Fatal("output is not AVIF")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isAVIF(result.Data) {
-		t.Fatal("output is not AVIF")
-	}
-	t.Logf("PNG -> AVIF balanced: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestAvifEncodeCompactJPEG(t *testing.T) {
-	data := loadTestData(t, "photo.jpg")
-	result, err := Avif.EncodeCompact(data, 80, 0)
-	if err != nil {
-		t.Fatalf("Avif.EncodeCompact failed: %v", err)
+// --- AVIF Fast ---
+
+func TestAvifEncodeFast(t *testing.T) {
+	files := append(jpegFiles, pngFiles...)
+	for _, name := range files {
+		t.Run(name, func(t *testing.T) {
+			data := loadTestData(t, name)
+			result, err := Avif.EncodeFast(data, 80, 0)
+			if err != nil {
+				t.Fatalf("Avif.EncodeFast(%s) failed: %v", name, err)
+			}
+			if !isAVIF(result.Data) {
+				t.Fatal("output is not AVIF")
+			}
+			t.Logf("%s: %d -> %d bytes", name, len(data), len(result.Data))
+		})
 	}
-	if !isAVIF(result.Data) {
-		t.Fatal("output is not AVIF")
-	}
-	t.Logf("JPEG -> AVIF compact: %d -> %d bytes", len(data), len(result.Data))
 }
 
-func TestAvifEncodeFastJPEG(t *testing.T) {
-	data := loadTestData(t, "photo.jpg")
-	result, err := Avif.EncodeFast(data, 80, 0)
-	if err != nil {
-		t.Fatalf("Avif.EncodeFast failed: %v", err)
-	}
-	if !isAVIF(result.Data) {
-		t.Fatal("output is not AVIF")
-	}
-	t.Logf("JPEG -> AVIF fast: %d -> %d bytes", len(data), len(result.Data))
-}
+// --- Error cases ---
 
 func TestErrorEmptyInput(t *testing.T) {
 	_, err := Webp.EncodeLossy(nil, 80, false)

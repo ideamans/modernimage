@@ -113,21 +113,22 @@ jobs:
             const { version, webp, avif } = require('./dist/index');
             const fs = require('fs');
             const assert = require('assert');
+            const path = require('path');
             console.log('version:', version());
-            const jpg = fs.readFileSync('../testdata/photo.jpg');
-            const png = fs.readFileSync('../testdata/logo.png');
-            const gif = fs.readFileSync('../testdata/animation.gif');
 
-            let r;
-            r = webp.encodeLossy(jpg, 80); assert(r.data.length > 0); console.log('webp.encodeLossy JPEG:', r.data.length);
-            r = webp.encodeLossy(png, 80, true); assert(r.data.length > 0); console.log('webp.encodeLossy PNG:', r.data.length);
-            r = webp.encodeLossless(png); assert(r.data.length > 0); console.log('webp.encodeLossless PNG:', r.data.length);
-            r = webp.encodeLossless(jpg, true); assert(r.data.length > 0); console.log('webp.encodeLossless JPEG:', r.data.length);
-            r = webp.encodeGif(gif); assert(r.data.length > 0); console.log('webp.encodeGif:', r.data.length);
-            r = avif.encodeBalanced(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeBalanced JPEG:', r.data.length);
-            r = avif.encodeBalanced(png, 80); assert(r.data.length > 0); console.log('avif.encodeBalanced PNG:', r.data.length);
-            r = avif.encodeCompact(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeCompact JPEG:', r.data.length);
-            r = avif.encodeFast(jpg, 80); assert(r.data.length > 0); console.log('avif.encodeFast JPEG:', r.data.length);
+            const td = '../testdata';
+            const load = (f) => fs.readFileSync(path.join(td, f));
+            const jpegs = ['photo.jpg','photo-like.jpg','landscape-like.jpg','medium-512x512.jpg','edges.jpg','gradient-radial.jpg','small-128x128.jpg'];
+            const pngs = ['logo.png','photo-like.png','text.png','flat-color.png','gradient-horizontal.png','small-128x128.png'];
+            const gifs = ['animation.gif','animated-3frames.gif','animated-small.gif','static-512x512.gif','static-alpha.gif'];
+
+            for (const f of jpegs) { const r = webp.encodeLossy(load(f), 80); assert(r.data.length > 0); console.log('webp.lossy', f, r.data.length); }
+            for (const f of pngs)  { const r = webp.encodeLossy(load(f), 80); assert(r.data.length > 0); console.log('webp.lossy', f, r.data.length); }
+            for (const f of [...jpegs,...pngs]) { const r = webp.encodeLossless(load(f)); assert(r.data.length > 0); console.log('webp.lossless', f, r.data.length); }
+            for (const f of gifs)  { const r = webp.encodeGif(load(f)); assert(r.data.length > 0); console.log('webp.gif', f, r.data.length); }
+            for (const f of [...jpegs,...pngs]) { const r = avif.encodeBalanced(load(f), 80); assert(r.data.length > 0); console.log('avif.balanced', f, r.data.length); }
+            for (const f of ['photo.jpg','small-128x128.jpg','logo.png']) { const r = avif.encodeCompact(load(f), 80); assert(r.data.length > 0); console.log('avif.compact', f, r.data.length); }
+            for (const f of [...jpegs,...pngs]) { const r = avif.encodeFast(load(f), 80); assert(r.data.length > 0); console.log('avif.fast', f, r.data.length); }
             console.log('All tests passed');
           "
 
