@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.2.1}"
+VERSION="${1:-0.2.2}"
 TARGET_DIR="${2:-.}"
 
 GITHUB_REPO="ideamans/libmodernimage"
