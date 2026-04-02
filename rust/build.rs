@@ -108,6 +108,8 @@ fn main() {
                 println!("cargo:rustc-link-lib=stdc++");
             }
             println!("cargo:rustc-link-lib=ws2_32");
+            println!("cargo:rustc-link-lib=ole32");
+            println!("cargo:rustc-link-lib=shlwapi");
         }
         _ => {}
     }

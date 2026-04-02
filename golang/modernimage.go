@@ -14,7 +14,7 @@ package modernimage
 
 #cgo darwin LDFLAGS: -lc++ -lpthread -lm
 #cgo linux LDFLAGS: -lstdc++ -lpthread -lm
-#cgo windows LDFLAGS: -lstdc++ -lws2_32
+#cgo windows LDFLAGS: -lstdc++ -lws2_32 -lole32 -lshlwapi
 
 #include <stdlib.h>
 #include "modernimage.h"
