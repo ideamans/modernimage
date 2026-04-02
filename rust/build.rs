@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-const LIBMODERNIMAGE_VERSION: &str = "0.2.2";
+const LIBMODERNIMAGE_VERSION: &str = "0.2.4";
 const GITHUB_REPO: &str = "ideamans/libmodernimage";
 
 fn main() {

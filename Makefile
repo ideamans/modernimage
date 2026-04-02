@@ -1,4 +1,4 @@
-LIBMODERNIMAGE_VERSION ?= 0.2.2
+LIBMODERNIMAGE_VERSION ?= 0.2.4
 
 .PHONY: setup test-go test-typescript test-rust test-all clean release
 
