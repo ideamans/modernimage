@@ -63,6 +63,11 @@ jobs:
           GO_BIN=$(find /c/hostedtoolcache/windows/go -name "go.exe" -path "*/bin/go.exe" 2>/dev/null | head -1)
           GO_DIR=$(dirname "$GO_BIN")
           export PATH="$GO_DIR:$PATH"
+          # Windows: libmodernimage is linked dynamically via the DLL
+          # import library (see golang/modernimage.go #cgo LDFLAGS
+          # comment). Put the directory containing libmodernimage.dll
+          # on PATH so the loader finds it at process start.
+          export PATH="$PWD/golang/shared/lib/windows-amd64:$PATH"
           export CC=gcc
           export CXX=g++
           export CGO_ENABLED=1

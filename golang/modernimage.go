@@ -10,11 +10,19 @@ package modernimage
 #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/shared/lib/darwin-amd64/libmodernimage.a
 #cgo linux,amd64 LDFLAGS: ${SRCDIR}/shared/lib/linux-amd64/libmodernimage.a
 #cgo linux,arm64 LDFLAGS: ${SRCDIR}/shared/lib/linux-arm64/libmodernimage.a
-#cgo windows,amd64 LDFLAGS: ${SRCDIR}/shared/lib/windows-amd64/libmodernimage.a
+// On Windows we link against the DLL's import library (.dll.a) instead
+// of the fat static archive. Statically linking libmodernimage into the
+// Go test binary produced non-deterministic 0xC00000FF crashes that
+// matched the profile of a winpthreads/Go exception-handler conflict.
+// The DLL isolates libmodernimage's runtime (winpthreads, libwebp,
+// libavif, ...) in its own module, which is the same arrangement the
+// TypeScript binding uses via koffi — and that binding passes CI.
+// Requires libmodernimage.dll to be alongside the executable (or on
+// PATH); setup-go.sh installs it next to the .dll.a.
+#cgo windows,amd64 LDFLAGS: ${SRCDIR}/shared/lib/windows-amd64/libmodernimage.dll.a
 
 #cgo darwin LDFLAGS: -lc++ -lpthread -lm
 #cgo linux LDFLAGS: -lstdc++ -lpthread -lm
-#cgo windows LDFLAGS: -lstdc++ -lws2_32 -lole32 -lshlwapi
 
 #include <stdlib.h>
 #include "modernimage.h"

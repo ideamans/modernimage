@@ -5,6 +5,11 @@
 set -euo pipefail
 
 VERSION="${1:-0.3.1}"
+# Windows dev note: we extract BOTH libmodernimage.a (static archive)
+# AND libmodernimage.dll / libmodernimage.dll.a (import lib + DLL) so
+# the Go binding can choose between static and dynamic linking. See
+# golang/modernimage.go for the #cgo LDFLAGS comment on why Windows
+# uses the DLL path.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 GO_DIR="${PROJECT_DIR}/golang/shared"
@@ -34,6 +39,16 @@ for PAIR in $PLATFORMS; do
   # Static library
   mkdir -p "${GO_DIR}/lib/${GO_PLATFORM}"
   cp "${SRC}/libmodernimage.a" "${GO_DIR}/lib/${GO_PLATFORM}/"
+
+  # Windows additionally needs the DLL + import library (.dll.a).
+  # CGO on Windows statically links winpthreads-based libmodernimage
+  # badly with Go's exception handling; linking the DLL via its
+  # import library sidesteps that by keeping libmodernimage isolated
+  # in its own module.
+  if [ "$GO_PLATFORM" = "windows-amd64" ]; then
+    cp "${SRC}/libmodernimage.dll"   "${GO_DIR}/lib/${GO_PLATFORM}/"
+    cp "${SRC}/libmodernimage.dll.a" "${GO_DIR}/lib/${GO_PLATFORM}/"
+  fi
 
   # Header (once)
   if [ "$HEADER_INSTALLED" = false ]; then
