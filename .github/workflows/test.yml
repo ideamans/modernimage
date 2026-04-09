@@ -66,17 +66,8 @@ jobs:
           export CC=gcc
           export CXX=g++
           export CGO_ENABLED=1
-          export GOTRACEBACK=crash
           cd golang
-          # DEBUG (windows branch): TestWebpEncodeLossless alone passed in
-          # the previous run; only the full suite crashes. Likely cause:
-          # OS thread migration / state accumulation across CGO calls.
-          # Try GOMAXPROCS=1 to pin all goroutines to a single OS thread.
-          echo "=== Step 1: full suite with GOMAXPROCS=1 ==="
-          GOMAXPROCS=1 go test -v -timeout 240s -count=1 -p 1 || echo "EXIT_GOMAXPROCS1=$?"
-          echo ""
-          echo "=== Step 2: full suite WITHOUT GOMAXPROCS (will likely fail) ==="
-          go test -v -timeout 240s -count=1 -p 1 || echo "EXIT_NORMAL=$?"
+          go test -v -timeout 120s
 
   test-typescript:
     name: TypeScript (${{ matrix.os }})
@@ -190,16 +181,12 @@ jobs:
           CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
           CARGO_DIR=$(dirname "$CARGO_BIN")
           export PATH="$CARGO_DIR:$PATH"
-          export RUST_BACKTRACE=full
           cd rust
-          # DEBUG (windows branch): force serial execution and capture
-          # full backtrace so the abort site is visible.
-          echo "=== Step 1: serial run, encode tests only ==="
-          cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1 \
-            test_webp test_avif test_alpha test_compression test_concurrent || echo "EXIT=$?"
-          echo ""
-          echo "=== Step 2: serial run, full suite ==="
-          cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1 || echo "EXIT=$?"
+          # Serial execution: libmodernimage serializes tool calls internally
+          # via a global IO mutex, so parallel test threads just pile up
+          # waiting — and on Windows the contention exposes the MinGW
+          # pthread/CGO interaction bug. Keep it single-threaded.
+          cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1
 
       - name: Build CLI (Unix)
         if: runner.os != 'Windows'
