@@ -1,6 +1,6 @@
 [package]
 name = "modernimage"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2021"
 authors = ["Ideamans <info@ideamans.com>"]
 description = "WebP and AVIF image encoding via libmodernimage"
@@ -22,9 +22,17 @@ path = "src/bin/modernimage.rs"
 thiserror = "1.0"
 tempfile = "3.10"
 clap = { version = "4", features = ["derive"] }
+# Used by NormalizeJpegOrientation's decode → rotate → re-encode fallback
+# (engaged when jpegtran -perfect refuses a non-iMCU-aligned source). Pure
+# Rust JPEG codec, no native deps. See JUDGE-5 in review.md.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [build-dependencies]
 dirs = "5.0"
 ureq = "2.9"
 flate2 = "1.0"
 tar = "0.4"
+
+[dev-dependencies]
+flate2 = "1.0"
+crc32fast = "1.4"

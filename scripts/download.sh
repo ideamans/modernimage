@@ -1,12 +1,12 @@
 #!/bin/bash
 # Download libmodernimage release artifacts for the current platform.
 # Usage: ./scripts/download.sh [version] [target_dir]
-#   version:    Release version (default: 0.1.0)
+#   version:    Release version (default: 0.3.0)
 #   target_dir: Directory to extract into (default: current directory)
 
 set -euo pipefail
 
-VERSION="${1:-0.2.5}"
+VERSION="${1:-0.3.0}"
 TARGET_DIR="${2:-.}"
 
 GITHUB_REPO="ideamans/libmodernimage"

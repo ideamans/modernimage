@@ -24,13 +24,34 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"unsafe"
 )
 
 // EncodeResult holds the output of any encode function.
+//
+// Warnings contains every non-empty stderr line emitted by the underlying
+// tool (cwebp / avifenc / gif2webp / jpegtran). The encode operation
+// succeeded — these are not fatal. The slice may contain a mix of:
+//
+//   - Genuine warnings about data quality issues, e.g.
+//     "Premature end of JPEG file" (libjpeg quietly fabricated missing
+//     entropy data — your output likely has black/grey areas where the
+//     source was truncated)
+//   - Informational diagnostics that the tool always prints (cwebp in
+//     particular prints encoding stats: dimensions, output size, PSNR,
+//     macroblock distribution, etc.)
+//
+// libmodernimage does NOT filter these; the caller is expected to inspect
+// the lines and decide which deserve attention. A safe heuristic is to
+// look for known warning substrings ("Premature end", "WARNING", "ERROR"
+// etc.) rather than treating every line as a problem.
+//
+// Empty when the tool produced no stderr.
 type EncodeResult struct {
 	Data     []byte
 	MimeType string
+	Warnings []string
 }
 
 // detectFormat returns "jpeg", "png", "gif", or "" based on magic bytes.
@@ -132,7 +153,32 @@ func callTool(tool toolKind, inputData []byte, argv []string) (*EncodeResult, er
 		return nil, fmt.Errorf("modernimage: encoding produced empty output")
 	}
 
-	return &EncodeResult{Data: outData}, nil
+	// Capture non-fatal stderr from the success path. These become
+	// EncodeResult.Warnings so callers can detect silent data quality
+	// issues without having to fail.
+	warnings := captureStderrWarnings(ctx)
+
+	return &EncodeResult{Data: outData, Warnings: warnings}, nil
+}
+
+// captureStderrWarnings reads any stderr captured by the C context and
+// returns it as a slice of non-empty trimmed lines.
+func captureStderrWarnings(ctx *C.modernimage_context_t) []string {
+	errSize := C.modernimage_get_stderr_size(ctx)
+	if errSize == 0 {
+		return nil
+	}
+	errBuf := make([]byte, errSize)
+	C.modernimage_copy_stderr(ctx, (*C.char)(unsafe.Pointer(&errBuf[0])), errSize)
+	raw := string(errBuf)
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // createTempFile creates a temp file with the given suffix and returns its path.
@@ -386,38 +432,61 @@ func JpegOrientation(data []byte) int {
 	return int(C.modernimage_jpeg_orientation(unsafe.Pointer(&data[0]), C.size_t(len(data))))
 }
 
-// NormalizeJpegOrientation applies lossless rotation based on EXIF orientation,
-// then strips EXIF metadata (preserving ICC profile).
-// If orientation is 1 (normal) or not present, returns the original data unchanged.
+// NormalizeJpegOrientation applies rotation based on EXIF orientation, then
+// strips EXIF metadata (preserving ICC profile).
+//
+// Two-stage strategy (since v0.3):
+//  1. Try jpegtran -perfect (truly lossless rotation). For most JPEGs whose
+//     internal storage is iMCU-aligned (real-camera output, libjpeg-encoded
+//     output), this is fast and pixel-perfect.
+//  2. If jpegtran -perfect fails (the source JPEG was encoded without
+//     iMCU-aligned padding — e.g. some non-libjpeg encoders), fall back to a
+//     decode → rotate → re-encode path. This is lossy in the JPEG re-encode
+//     sense but **preserves every pixel**: no edge trimming. The original
+//     ICC profile is re-injected so color management round-trips.
+//
+// If orientation is 1 (normal) or not present, returns a copy of the input.
+// Returns an error for empty input.
 func NormalizeJpegOrientation(data []byte) ([]byte, error) {
 	if len(data) == 0 {
-		return data, nil
+		return nil, fmt.Errorf("modernimage: empty input data")
 	}
 
 	orientation := JpegOrientation(data)
 	if orientation <= 1 {
-		return data, nil
+		out := make([]byte, len(data))
+		copy(out, data)
+		return out, nil
 	}
 
-	// Map EXIF orientation to jpegtran transform
-	var transformArgs []string
-	switch orientation {
-	case 2:
-		transformArgs = []string{"-flip", "horizontal"}
-	case 3:
-		transformArgs = []string{"-rotate", "180"}
-	case 4:
-		transformArgs = []string{"-flip", "vertical"}
-	case 5:
-		transformArgs = []string{"-transpose"}
-	case 6:
-		transformArgs = []string{"-rotate", "90"}
-	case 7:
-		transformArgs = []string{"-transverse"}
-	case 8:
-		transformArgs = []string{"-rotate", "270"}
-	default:
-		return data, nil
+	// Stage 1: try jpegtran -perfect (no -trim).
+	out, perfErr := normalizeViaJpegtranPerfect(data, orientation)
+	if perfErr == nil {
+		return out, nil
+	}
+
+	// Stage 2: fall back to decode → rotate → re-encode (preserves every
+	// pixel, re-injects original ICC).
+	out, fbErr := normalizeViaDecodeRotateEncode(data, orientation)
+	if fbErr != nil {
+		return nil, fmt.Errorf(
+			"modernimage: jpegtran -perfect failed (%v) and decode fallback also failed: %w",
+			perfErr, fbErr,
+		)
+	}
+	return out, nil
+}
+
+// normalizeViaJpegtranPerfect runs jpegtran in strict (lossless) mode.
+// Returns an error for any non-iMCU-aligned input.
+func normalizeViaJpegtranPerfect(data []byte, orientation int) ([]byte, error) {
+	transformArgs, ok := orientationToJpegtranArgs(orientation)
+	if !ok {
+		// Should never happen for orientation 2..8, but match the original
+		// behavior of returning the input verbatim.
+		out := make([]byte, len(data))
+		copy(out, data)
+		return out, nil
 	}
 
 	tmpOut, err := createTempFile(".jpg")
@@ -426,17 +495,37 @@ func NormalizeJpegOrientation(data []byte) ([]byte, error) {
 	}
 	defer os.Remove(tmpOut)
 
-	// Build argv: jpegtran -copy icc -trim <transform> -outfile <output>
-	argv := []string{"jpegtran", "-copy", "icc", "-trim"}
+	// -perfect makes jpegtran refuse non-iMCU-aligned operations instead of
+	// silently dropping edge pixels (which is what -trim used to do).
+	argv := []string{"jpegtran", "-copy", "icc", "-perfect"}
 	argv = append(argv, transformArgs...)
 	argv = append(argv, "-outfile", tmpOut)
 
 	result, err := callTool(toolJpegtran, data, argv)
 	if err != nil {
-		return nil, fmt.Errorf("modernimage: jpegtran orientation %d: %w", orientation, err)
+		return nil, fmt.Errorf("jpegtran -perfect orientation %d: %w", orientation, err)
 	}
-
 	return result.Data, nil
+}
+
+func orientationToJpegtranArgs(orientation int) ([]string, bool) {
+	switch orientation {
+	case 2:
+		return []string{"-flip", "horizontal"}, true
+	case 3:
+		return []string{"-rotate", "180"}, true
+	case 4:
+		return []string{"-flip", "vertical"}, true
+	case 5:
+		return []string{"-transpose"}, true
+	case 6:
+		return []string{"-rotate", "90"}, true
+	case 7:
+		return []string{"-transverse"}, true
+	case 8:
+		return []string{"-rotate", "270"}, true
+	}
+	return nil, false
 }
 
 // Version returns the libmodernimage version string.

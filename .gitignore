@@ -12,3 +12,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 /tmp/
+
+# Review notes (work-in-progress, not committed)
+review.md
+
+# Claude Code session state
+.claude/
