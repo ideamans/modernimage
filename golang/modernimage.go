@@ -53,9 +53,10 @@ func detectFormat(data []byte) string {
 type toolKind int
 
 const (
-	toolCwebp   toolKind = 0
+	toolCwebp    toolKind = 0
 	toolGif2webp toolKind = 1
 	toolAvifenc  toolKind = 2
+	toolJpegtran toolKind = 3
 )
 
 // callTool handles context lifecycle, temp files, stdin injection, tool execution, and output reading.
@@ -97,6 +98,8 @@ func callTool(tool toolKind, inputData []byte, argv []string) (*EncodeResult, er
 		rc = C.modernimage_gif2webp(ctx, argc, argvPtr)
 	case toolAvifenc:
 		rc = C.modernimage_avifenc(ctx, argc, argvPtr)
+	case toolJpegtran:
+		rc = C.modernimage_jpegtran(ctx, argc, argvPtr)
 	}
 
 	if rc != 0 {
@@ -109,10 +112,10 @@ func callTool(tool toolKind, inputData []byte, argv []string) (*EncodeResult, er
 		return nil, fmt.Errorf("modernimage: tool exited with code %d", int(rc))
 	}
 
-	// Find and read the output file (last arg after -o)
+	// Find and read the output file (last arg after -o or -outfile)
 	outPath := ""
 	for i, a := range argv {
-		if a == "-o" && i+1 < len(argv) {
+		if (a == "-o" || a == "-outfile") && i+1 < len(argv) {
 			outPath = argv[i+1]
 			break
 		}
@@ -368,6 +371,72 @@ func encodeAvif(data []byte, quality int, jobs int, preset avifPreset, opName st
 	}
 	result.MimeType = "image/avif"
 	return result, nil
+}
+
+// JpegOrientation returns the EXIF orientation value (1-8) from JPEG data.
+// Returns 0 if no orientation tag is found or data is not JPEG.
+// This is a pure read-only operation — very fast, no decompression needed.
+func JpegOrientation(data []byte) int {
+	if len(data) == 0 {
+		return 0
+	}
+	var pinner runtime.Pinner
+	pinner.Pin(&data[0])
+	defer pinner.Unpin()
+	return int(C.modernimage_jpeg_orientation(unsafe.Pointer(&data[0]), C.size_t(len(data))))
+}
+
+// NormalizeJpegOrientation applies lossless rotation based on EXIF orientation,
+// then strips EXIF metadata (preserving ICC profile).
+// If orientation is 1 (normal) or not present, returns the original data unchanged.
+func NormalizeJpegOrientation(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return data, nil
+	}
+
+	orientation := JpegOrientation(data)
+	if orientation <= 1 {
+		return data, nil
+	}
+
+	// Map EXIF orientation to jpegtran transform
+	var transformArgs []string
+	switch orientation {
+	case 2:
+		transformArgs = []string{"-flip", "horizontal"}
+	case 3:
+		transformArgs = []string{"-rotate", "180"}
+	case 4:
+		transformArgs = []string{"-flip", "vertical"}
+	case 5:
+		transformArgs = []string{"-transpose"}
+	case 6:
+		transformArgs = []string{"-rotate", "90"}
+	case 7:
+		transformArgs = []string{"-transverse"}
+	case 8:
+		transformArgs = []string{"-rotate", "270"}
+	default:
+		return data, nil
+	}
+
+	tmpOut, err := createTempFile(".jpg")
+	if err != nil {
+		return nil, fmt.Errorf("modernimage: %w", err)
+	}
+	defer os.Remove(tmpOut)
+
+	// Build argv: jpegtran -copy icc -trim <transform> -outfile <output>
+	argv := []string{"jpegtran", "-copy", "icc", "-trim"}
+	argv = append(argv, transformArgs...)
+	argv = append(argv, "-outfile", tmpOut)
+
+	result, err := callTool(toolJpegtran, data, argv)
+	if err != nil {
+		return nil, fmt.Errorf("modernimage: jpegtran orientation %d: %w", orientation, err)
+	}
+
+	return result.Data, nil
 }
 
 // Version returns the libmodernimage version string.

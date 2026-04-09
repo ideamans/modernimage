@@ -5,6 +5,8 @@ import {
   encodeBalanced,
   encodeCompact,
   encodeFast,
+  jpegOrientation,
+  normalizeJpegOrientation,
   version,
 } from './modernimage'
 
@@ -21,4 +23,9 @@ export const avif = {
   encodeBalanced,
   encodeCompact,
   encodeFast,
+}
+
+export const jpeg = {
+  orientation: jpegOrientation,
+  normalizeOrientation: normalizeJpegOrientation,
 }

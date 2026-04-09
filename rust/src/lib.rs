@@ -55,6 +55,7 @@ enum Tool {
     Cwebp,
     Gif2webp,
     Avifenc,
+    Jpegtran,
 }
 
 fn call_tool(tool: Tool, input_data: &[u8], argv: &[&str], use_stdin: bool) -> Result<Vec<u8>> {
@@ -83,6 +84,7 @@ fn call_tool(tool: Tool, input_data: &[u8], argv: &[&str], use_stdin: bool) -> R
             Tool::Cwebp => ffi::modernimage_cwebp(ctx.ptr, argc, argv_ptr),
             Tool::Gif2webp => ffi::modernimage_gif2webp(ctx.ptr, argc, argv_ptr),
             Tool::Avifenc => ffi::modernimage_avifenc(ctx.ptr, argc, argv_ptr),
+            Tool::Jpegtran => ffi::modernimage_jpegtran(ctx.ptr, argc, argv_ptr),
         }
     };
 
@@ -102,7 +104,7 @@ fn call_tool(tool: Tool, input_data: &[u8], argv: &[&str], use_stdin: bool) -> R
 
     let out_path = argv
         .windows(2)
-        .find(|w| w[0] == "-o")
+        .find(|w| w[0] == "-o" || w[0] == "-outfile")
         .map(|w| w[1])
         .ok_or_else(|| {
             ModernImageError::Io(std::io::Error::new(
@@ -338,6 +340,57 @@ pub mod avif {
     }
 }
 
+/// JPEG orientation and normalization functions.
+pub mod jpeg {
+    use super::*;
+
+    /// Returns the EXIF orientation value (1-8) from JPEG data.
+    /// Returns 0 if no orientation tag is found or data is not JPEG.
+    /// This is a pure read-only operation — very fast, no decompression needed.
+    pub fn orientation(data: &[u8]) -> i32 {
+        if data.is_empty() {
+            return 0;
+        }
+        unsafe {
+            ffi::modernimage_jpeg_orientation(data.as_ptr() as *const c_void, data.len())
+        }
+    }
+
+    /// Applies lossless rotation based on EXIF orientation, then strips EXIF
+    /// metadata (preserving ICC profile).
+    /// If orientation is 1 (normal) or not present, returns a clone of the original data.
+    pub fn normalize_orientation(data: &[u8]) -> Result<Vec<u8>> {
+        if data.is_empty() {
+            return Err(ModernImageError::EmptyInput);
+        }
+
+        let ori = orientation(data);
+        if ori <= 1 {
+            return Ok(data.to_vec());
+        }
+
+        let transform_args: &[&str] = match ori {
+            2 => &["-flip", "horizontal"],
+            3 => &["-rotate", "180"],
+            4 => &["-flip", "vertical"],
+            5 => &["-transpose"],
+            6 => &["-rotate", "90"],
+            7 => &["-transverse"],
+            8 => &["-rotate", "270"],
+            _ => return Ok(data.to_vec()),
+        };
+
+        let tmp = tempfile::Builder::new().suffix(".jpg").tempfile()?;
+        let tmp_path = tmp.path().to_str().unwrap().to_string();
+
+        let mut argv = vec!["jpegtran", "-copy", "icc", "-trim"];
+        argv.extend_from_slice(transform_args);
+        argv.extend_from_slice(&["-outfile", &tmp_path]);
+
+        call_tool(Tool::Jpegtran, data, &argv, true)
+    }
+}
+
 /// Get the libmodernimage version string.
 pub fn version() -> String {
     unsafe {
@@ -459,6 +512,90 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{}: {}", name, e));
             assert!(is_avif(&result.data), "{}: not AVIF", name);
         }
+    }
+
+    fn inject_exif_orientation(jpeg: &[u8], orientation: u8) -> Vec<u8> {
+        assert!(jpeg.len() >= 2 && jpeg[0] == 0xFF && jpeg[1] == 0xD8);
+        let exif: Vec<u8> = vec![
+            0xFF, 0xE1, // APP1 marker
+            0x00, 0x22, // length = 34
+            b'E', b'x', b'i', b'f', 0x00, 0x00,
+            b'M', b'M', // big-endian
+            0x00, 0x2A, // TIFF magic
+            0x00, 0x00, 0x00, 0x08, // offset to IFD0
+            0x00, 0x01, // 1 entry
+            0x01, 0x12, // tag: Orientation
+            0x00, 0x03, // type: SHORT
+            0x00, 0x00, 0x00, 0x01, // count: 1
+            0x00, orientation, 0x00, 0x00, // value
+            0x00, 0x00, 0x00, 0x00, // next IFD: none
+        ];
+        let mut result = Vec::with_capacity(jpeg.len() + exif.len());
+        result.extend_from_slice(&jpeg[..2]); // SOI
+        result.extend_from_slice(&exif);
+        result.extend_from_slice(&jpeg[2..]);
+        result
+    }
+
+    #[test]
+    fn test_jpeg_orientation() {
+        let jpeg = load_test_data("small-128x128.jpg");
+        assert_eq!(jpeg::orientation(&jpeg), 0); // no EXIF
+
+        for ori in 1u8..=8 {
+            let data = inject_exif_orientation(&jpeg, ori);
+            assert_eq!(jpeg::orientation(&data), ori as i32, "orientation {}", ori);
+        }
+
+        // non-JPEG
+        let png = load_test_data("small-128x128.png");
+        assert_eq!(jpeg::orientation(&png), 0);
+        assert_eq!(jpeg::orientation(&[]), 0);
+    }
+
+    #[test]
+    fn test_normalize_jpeg_orientation() {
+        let jpeg = load_test_data("small-128x128.jpg");
+
+        // No EXIF - returns clone
+        let result = jpeg::normalize_orientation(&jpeg).unwrap();
+        assert_eq!(result, jpeg);
+
+        // orientation=1 - returns clone
+        let data1 = inject_exif_orientation(&jpeg, 1);
+        let result1 = jpeg::normalize_orientation(&data1).unwrap();
+        assert_eq!(result1, data1);
+
+        // All orientations 2-8
+        for ori in 2u8..=8 {
+            let data = inject_exif_orientation(&jpeg, ori);
+            let result = jpeg::normalize_orientation(&data)
+                .unwrap_or_else(|e| panic!("orientation {}: {}", ori, e));
+            // Result should be valid JPEG
+            assert!(result.len() >= 2 && result[0] == 0xFF && result[1] == 0xD8,
+                    "orientation {}: not valid JPEG", ori);
+            // Result should have no EXIF orientation
+            let new_ori = jpeg::orientation(&result);
+            assert!(new_ori <= 1, "orientation {}: result still has orientation {}", ori, new_ori);
+        }
+    }
+
+    #[test]
+    fn test_normalize_then_webp() {
+        let jpeg = load_test_data("small-128x128.jpg");
+        let data = inject_exif_orientation(&jpeg, 6);
+        let normalized = jpeg::normalize_orientation(&data).unwrap();
+        let result = webp::encode_lossy(&normalized, 80, false).unwrap();
+        assert!(is_webp(&result.data));
+    }
+
+    #[test]
+    fn test_normalize_then_avif() {
+        let jpeg = load_test_data("small-128x128.jpg");
+        let data = inject_exif_orientation(&jpeg, 3);
+        let normalized = jpeg::normalize_orientation(&data).unwrap();
+        let result = avif::encode_fast(&normalized, 80, 0).unwrap();
+        assert!(is_avif(&result.data));
     }
 
     #[test]

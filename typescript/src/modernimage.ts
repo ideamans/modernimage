@@ -8,6 +8,8 @@ import {
   modernimage_cwebp,
   modernimage_gif2webp,
   modernimage_avifenc,
+  modernimage_jpegtran,
+  modernimage_jpeg_orientation,
   modernimage_get_exit_code,
   modernimage_get_stderr_size,
   modernimage_copy_stderr,
@@ -61,10 +63,10 @@ function callTool(
       throw new ModernImageError(errMsg)
     }
 
-    // Find output path from argv (-o <path>)
+    // Find output path from argv (-o or -outfile <path>)
     let outPath = ''
     for (let i = 0; i < argv.length; i++) {
-      if (argv[i] === '-o' && i + 1 < argv.length) {
+      if ((argv[i] === '-o' || argv[i] === '-outfile') && i + 1 < argv.length) {
         outPath = argv[i + 1]
         break
       }
@@ -243,6 +245,51 @@ export function encodeCompact(data: Buffer, quality: number = 80, jobs: number =
  */
 export function encodeFast(data: Buffer, quality: number = 80, jobs: number = 0): EncodeResult {
   return encodeAvif(data, quality, jobs, presetFast, 'encodeFast')
+}
+
+/**
+ * Returns the EXIF orientation value (1-8) from JPEG data.
+ * Returns 0 if no orientation tag is found or data is not JPEG.
+ * This is a pure read-only operation — very fast, no decompression needed.
+ */
+export function jpegOrientation(data: Buffer): number {
+  if (!data || data.length === 0) return 0
+  return modernimage_jpeg_orientation(data, data.length)
+}
+
+/**
+ * Applies lossless rotation based on EXIF orientation, then strips EXIF
+ * metadata (preserving ICC profile).
+ * If orientation is 1 (normal) or not present, returns the original data unchanged.
+ */
+export function normalizeJpegOrientation(data: Buffer): Buffer {
+  if (!data || data.length === 0) throw new ModernImageError('empty input data')
+
+  const ori = jpegOrientation(data)
+  if (ori <= 1) return data
+
+  const transformArgs: string[] = (() => {
+    switch (ori) {
+      case 2: return ['-flip', 'horizontal']
+      case 3: return ['-rotate', '180']
+      case 4: return ['-flip', 'vertical']
+      case 5: return ['-transpose']
+      case 6: return ['-rotate', '90']
+      case 7: return ['-transverse']
+      case 8: return ['-rotate', '270']
+      default: return []
+    }
+  })()
+
+  if (transformArgs.length === 0) return data
+
+  const tmpOut = createTempPath('.jpg')
+  try {
+    const argv = ['jpegtran', '-copy', 'icc', '-trim', ...transformArgs, '-outfile', tmpOut]
+    return callTool(modernimage_jpegtran, data, argv, true)
+  } finally {
+    try { fs.unlinkSync(tmpOut) } catch {}
+  }
 }
 
 /**

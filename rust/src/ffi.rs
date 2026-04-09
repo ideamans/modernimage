@@ -27,6 +27,13 @@ extern "C" {
         argc: c_int,
         argv: *const *const c_char,
     ) -> c_int;
+    pub fn modernimage_jpegtran(
+        ctx: *mut ModernImageContext,
+        argc: c_int,
+        argv: *const *const c_char,
+    ) -> c_int;
+
+    pub fn modernimage_jpeg_orientation(data: *const c_void, size: usize) -> c_int;
 
     pub fn modernimage_get_exit_code(ctx: *const ModernImageContext) -> c_int;
     pub fn modernimage_get_stderr_size(ctx: *const ModernImageContext) -> usize;

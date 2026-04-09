@@ -82,6 +82,32 @@ size_t modernimage_copy_stderr(const modernimage_context_t* ctx,
 int modernimage_get_exit_code(const modernimage_context_t* ctx);
 
 /*
+ * JPEG lossless transformation (jpegtran bridge, thread-safe)
+ *
+ * Executes jpegtran with the given arguments.
+ * argv[0] should be "jpegtran" for compatibility.
+ *
+ * Stdin: supported (no input file arg → reads from stdin)
+ * Stdout: jpegtran writes to stdout when no -outfile is given,
+ *         but for reliable cross-platform use, prefer -outfile.
+ *
+ * Common usage for orientation normalization:
+ *   jpegtran -copy icc -trim -rotate 90 -outfile out.jpg in.jpg
+ */
+int modernimage_jpegtran(modernimage_context_t* ctx, int argc, const char* argv[]);
+
+/*
+ * EXIF orientation detection (direct API, no context needed)
+ *
+ * Parses JPEG APP1 (Exif) marker to extract the orientation tag.
+ * Returns 1-8 for valid orientation, 0 if not found or not JPEG.
+ *
+ * This is a pure read-only binary parse — no libjpeg dependency,
+ * no I/O redirection, no mutex needed. Thread-safe.
+ */
+int modernimage_jpeg_orientation(const void* data, size_t size);
+
+/*
  * Version info
  */
 const char* modernimage_version(void);

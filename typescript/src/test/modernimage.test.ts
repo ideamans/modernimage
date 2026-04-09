@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import * as assert from 'node:assert'
 import * as fs from 'fs'
 import * as path from 'path'
-import { webp, avif, version, ModernImageError } from '../index'
+import { webp, avif, jpeg, version, ModernImageError } from '../index'
 
 const testdataDir = path.join(__dirname, '..', '..', '..', 'testdata')
 
@@ -123,6 +123,95 @@ describe('avif.encodeFast', () => {
       console.log(`  ${name}: ${data.length} -> ${result.data.length}`)
     })
   }
+})
+
+function injectExifOrientation(jpeg: Buffer, orientation: number): Buffer {
+  const exif = Buffer.from([
+    0xff, 0xe1, // APP1 marker
+    0x00, 0x22, // length = 34
+    0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\0\0"
+    0x4d, 0x4d, // big-endian "MM"
+    0x00, 0x2a, // TIFF magic
+    0x00, 0x00, 0x00, 0x08, // offset to IFD0
+    0x00, 0x01, // 1 entry
+    0x01, 0x12, // tag: Orientation
+    0x00, 0x03, // type: SHORT
+    0x00, 0x00, 0x00, 0x01, // count: 1
+    0x00, orientation, 0x00, 0x00, // value
+    0x00, 0x00, 0x00, 0x00, // next IFD: none
+  ])
+  return Buffer.concat([jpeg.subarray(0, 2), exif, jpeg.subarray(2)])
+}
+
+describe('jpeg.orientation', () => {
+  it('returns 0 for JPEG without EXIF', () => {
+    const data = loadTestData('small-128x128.jpg')
+    assert.strictEqual(jpeg.orientation(data), 0)
+  })
+
+  for (const ori of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    it(`detects orientation ${ori}`, () => {
+      const data = injectExifOrientation(loadTestData('small-128x128.jpg'), ori)
+      assert.strictEqual(jpeg.orientation(data), ori)
+    })
+  }
+
+  it('returns 0 for PNG', () => {
+    const data = loadTestData('small-128x128.png')
+    assert.strictEqual(jpeg.orientation(data), 0)
+  })
+
+  it('returns 0 for empty buffer', () => {
+    assert.strictEqual(jpeg.orientation(Buffer.alloc(0)), 0)
+  })
+})
+
+describe('jpeg.normalizeOrientation', () => {
+  it('returns same buffer when no EXIF', () => {
+    const data = loadTestData('small-128x128.jpg')
+    const result = jpeg.normalizeOrientation(data)
+    assert.strictEqual(result, data) // same reference
+  })
+
+  it('returns same buffer for orientation=1', () => {
+    const data = injectExifOrientation(loadTestData('small-128x128.jpg'), 1)
+    const result = jpeg.normalizeOrientation(data)
+    assert.strictEqual(result, data)
+  })
+
+  for (const ori of [2, 3, 4, 5, 6, 7, 8]) {
+    it(`normalizes orientation ${ori}`, () => {
+      const data = injectExifOrientation(loadTestData('small-128x128.jpg'), ori)
+      const result = jpeg.normalizeOrientation(data)
+      // Result should be valid JPEG
+      assert.ok(result.length >= 2 && result[0] === 0xff && result[1] === 0xd8,
+        'result is not valid JPEG')
+      // Should have no EXIF orientation
+      const newOri = jpeg.orientation(result)
+      assert.ok(newOri <= 1, `result still has orientation ${newOri}`)
+      console.log(`  orientation ${ori}: ${data.length} -> ${result.length}`)
+    })
+  }
+})
+
+describe('jpeg.normalizeOrientation -> WebP', () => {
+  it('normalize then encode WebP', () => {
+    const data = injectExifOrientation(loadTestData('small-128x128.jpg'), 6)
+    const normalized = jpeg.normalizeOrientation(data)
+    const result = webp.encodeLossy(normalized, 80)
+    assert.ok(isWebP(result.data))
+    console.log(`  orient6 -> normalize -> WebP: ${data.length} -> ${normalized.length} -> ${result.data.length}`)
+  })
+})
+
+describe('jpeg.normalizeOrientation -> AVIF', () => {
+  it('normalize then encode AVIF', () => {
+    const data = injectExifOrientation(loadTestData('small-128x128.jpg'), 3)
+    const normalized = jpeg.normalizeOrientation(data)
+    const result = avif.encodeFast(normalized, 80)
+    assert.ok(isAVIF(result.data))
+    console.log(`  orient3 -> normalize -> AVIF: ${data.length} -> ${normalized.length} -> ${result.data.length}`)
+  })
 })
 
 describe('error handling', () => {

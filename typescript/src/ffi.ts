@@ -25,6 +25,13 @@ export const modernimage_gif2webp = lib.func('modernimage_gif2webp', 'int', [ctx
 
 export const modernimage_avifenc = lib.func('modernimage_avifenc', 'int', [ctx_ptr, 'int', 'str *'])
 
+export const modernimage_jpegtran = lib.func('modernimage_jpegtran', 'int', [ctx_ptr, 'int', 'str *'])
+
+export const modernimage_jpeg_orientation = lib.func('modernimage_jpeg_orientation', 'int', [
+  koffi.pointer('void'),
+  'size_t',
+])
+
 export const modernimage_get_exit_code = lib.func('modernimage_get_exit_code', 'int', [ctx_ptr])
 
 export const modernimage_get_stderr_size = lib.func('modernimage_get_stderr_size', 'size_t', [ctx_ptr])
