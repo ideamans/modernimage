@@ -207,10 +207,7 @@ func TestWebpEncodeLossyPNG(t *testing.T) {
 	for _, name := range pngFiles {
 		t.Run(name, func(t *testing.T) {
 			data := loadTestData(t, name)
-			// DEBUG (windows branch): was multithread=true; swapped to
-			// false to test the hypothesis that cwebp -mt corrupts state
-			// across calls on Windows.
-			result, err := Webp.EncodeLossy(data, 80, false)
+			result, err := Webp.EncodeLossy(data, 80, true)
 			if err != nil {
 				t.Fatalf("Webp.EncodeLossy(%s) failed: %v", name, err)
 			}
