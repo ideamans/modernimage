@@ -42,7 +42,21 @@ fn main() {
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
-    // Search for libmodernimage.a in order:
+    // On Windows we link against libmodernimage's DLL (via its import
+    // library .dll.a). Statically linking the fat .a into the Rust
+    // test binary caused non-deterministic 0xC00000FF crashes that
+    // matched a winpthreads-vs-runtime exception-handler conflict;
+    // isolating libmodernimage in a DLL sidesteps the issue. See
+    // golang/modernimage.go for the same reasoning in the Go binding.
+    // All other platforms continue to link statically.
+    let use_dll_on_windows = target_os == "windows";
+    let primary_lib_filename = if use_dll_on_windows {
+        "libmodernimage.dll.a"
+    } else {
+        "libmodernimage.a"
+    };
+
+    // Search for the primary link target in order:
     // 1. LIBMODERNIMAGE_LIB_DIR env var
     // 2. Local lib/{platform}/ (development)
     // 3. Cache directory (auto-downloaded)
@@ -59,7 +73,7 @@ fn main() {
 
     let lib_dir = search_paths
         .iter()
-        .find(|path| path.join("libmodernimage.a").exists())
+        .find(|path| path.join(primary_lib_filename).exists())
         .cloned();
 
     let lib_dir = match lib_dir {
@@ -67,10 +81,10 @@ fn main() {
         None => {
             // Auto-download from GitHub Releases
             eprintln!(
-                "libmodernimage.a not found locally. Downloading v{} for {}...",
-                LIBMODERNIMAGE_VERSION, release_platform
+                "{} not found locally. Downloading v{} for {}...",
+                primary_lib_filename, LIBMODERNIMAGE_VERSION, release_platform
             );
-            match download_library(LIBMODERNIMAGE_VERSION, &release_platform, &cache_dir) {
+            match download_library(LIBMODERNIMAGE_VERSION, &release_platform, &cache_dir, use_dll_on_windows) {
                 Ok(()) => {
                     eprintln!("Downloaded to {}", cache_dir.display());
                     cache_dir
@@ -88,7 +102,15 @@ fn main() {
     };
 
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=modernimage");
+    if use_dll_on_windows {
+        // Dynamic link: cargo emits -lmodernimage which resolves via
+        // libmodernimage.dll.a (the MinGW import library), so the DLL
+        // is loaded at process start. The DLL must be alongside the
+        // final executable or on PATH at runtime.
+        println!("cargo:rustc-link-lib=dylib=modernimage");
+    } else {
+        println!("cargo:rustc-link-lib=static=modernimage");
+    }
 
     // System libraries (libjpeg/libpng/giflib/zlib are bundled in .a)
     match target_os.as_str() {
@@ -102,14 +124,21 @@ fn main() {
             println!("cargo:rustc-link-lib=pthread");
         }
         "windows" => {
-            // MSVC uses msvcrt (no stdc++); MinGW uses stdc++
-            let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-            if target_env == "gnu" {
-                println!("cargo:rustc-link-lib=stdc++");
+            // When linking the DLL, all transitive deps (stdc++,
+            // ws2_32, ole32, shlwapi, pthread, ...) live inside
+            // libmodernimage.dll and we don't need to pull them in
+            // again at the Rust link step. Only the static link
+            // path needs these system libraries.
+            if !use_dll_on_windows {
+                // MSVC uses msvcrt (no stdc++); MinGW uses stdc++
+                let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+                if target_env == "gnu" {
+                    println!("cargo:rustc-link-lib=stdc++");
+                }
+                println!("cargo:rustc-link-lib=ws2_32");
+                println!("cargo:rustc-link-lib=ole32");
+                println!("cargo:rustc-link-lib=shlwapi");
             }
-            println!("cargo:rustc-link-lib=ws2_32");
-            println!("cargo:rustc-link-lib=ole32");
-            println!("cargo:rustc-link-lib=shlwapi");
         }
         _ => {}
     }
@@ -126,7 +155,12 @@ fn get_cache_dir() -> PathBuf {
         .join("libmodernimage")
 }
 
-fn download_library(version: &str, release_platform: &str, dest_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn download_library(
+    version: &str,
+    release_platform: &str,
+    dest_dir: &PathBuf,
+    windows_dll: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let archive_name = format!("libmodernimage-{}.tar.gz", release_platform);
     let url = format!(
         "https://github.com/{}/releases/download/v{}/{}",
@@ -145,6 +179,15 @@ fn download_library(version: &str, release_platform: &str, dest_dir: &PathBuf) -
 
     fs::create_dir_all(dest_dir)?;
 
+    // Files to extract. On Windows with dynamic linking we need the
+    // DLL and its import library; otherwise the static archive is
+    // enough. We always extract .a as a fallback / dev convenience.
+    let wanted: &[&str] = if windows_dll {
+        &["libmodernimage.a", "libmodernimage.dll", "libmodernimage.dll.a"]
+    } else {
+        &["libmodernimage.a"]
+    };
+
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
@@ -154,16 +197,16 @@ fn download_library(version: &str, release_platform: &str, dest_dir: &PathBuf) -
             .unwrap_or("")
             .to_string();
 
-        // Only extract the .a file
-        if file_name == "libmodernimage.a" {
+        if wanted.contains(&file_name.as_str()) {
             let dest_path = dest_dir.join(&file_name);
             let mut file = fs::File::create(&dest_path)?;
             io::copy(&mut entry, &mut file)?;
         }
     }
 
-    if !dest_dir.join("libmodernimage.a").exists() {
-        return Err("libmodernimage.a not found in archive".into());
+    let required = if windows_dll { "libmodernimage.dll.a" } else { "libmodernimage.a" };
+    if !dest_dir.join(required).exists() {
+        return Err(format!("{} not found in archive", required).into());
     }
 
     Ok(())

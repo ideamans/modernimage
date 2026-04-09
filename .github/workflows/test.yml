@@ -186,11 +186,14 @@ jobs:
           CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
           CARGO_DIR=$(dirname "$CARGO_BIN")
           export PATH="$CARGO_DIR:$PATH"
+          # Rust build.rs links against libmodernimage.dll on Windows
+          # (see build.rs comment). Put the directory containing the
+          # DLL on PATH so the test binaries can find it at load time.
+          export PATH="$PWD/rust/lib/windows-amd64:$PATH"
           cd rust
           # Serial execution: libmodernimage serializes tool calls internally
           # via a global IO mutex, so parallel test threads just pile up
-          # waiting — and on Windows the contention exposes the MinGW
-          # pthread/CGO interaction bug. Keep it single-threaded.
+          # waiting.
           cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1
 
       - name: Build CLI (Unix)

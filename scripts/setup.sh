@@ -72,6 +72,13 @@ mkdir -p "${PROJECT_DIR}/golang/shared/include"
 mkdir -p "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}"
 cp "${SRC}/modernimage.h" "${PROJECT_DIR}/golang/shared/include/"
 cp "${SRC}/libmodernimage.a" "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
+# Mirror the Rust binding's Windows layout — same reason: we link the
+# DLL via its import library on Windows to avoid the winpthreads/
+# CGO runtime conflict. See golang/modernimage.go for details.
+if [ "$GO_PLATFORM" = "windows-amd64" ]; then
+  cp "${SRC}/libmodernimage.dll"   "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
+  cp "${SRC}/libmodernimage.dll.a" "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
+fi
 
 # TypeScript binding: lib/{go-platform}/ (shared library)
 echo "Installing for TypeScript binding..."
@@ -87,6 +94,13 @@ cp "${SRC}/${SHARED_LIB}" "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}/"
 echo "Installing for Rust binding..."
 mkdir -p "${PROJECT_DIR}/rust/lib/${GO_PLATFORM}"
 cp "${SRC}/libmodernimage.a" "${PROJECT_DIR}/rust/lib/${GO_PLATFORM}/"
+# On Windows, Rust links the DLL's import library (.dll.a) instead of
+# the fat static archive to sidestep a winpthreads/runtime conflict —
+# see rust/build.rs. Ship the DLL and import library alongside the .a.
+if [ "$GO_PLATFORM" = "windows-amd64" ]; then
+  cp "${SRC}/libmodernimage.dll"   "${PROJECT_DIR}/rust/lib/${GO_PLATFORM}/"
+  cp "${SRC}/libmodernimage.dll.a" "${PROJECT_DIR}/rust/lib/${GO_PLATFORM}/"
+fi
 cp "${SRC}/modernimage.h" "${PROJECT_DIR}/rust/"
 
 echo ""
