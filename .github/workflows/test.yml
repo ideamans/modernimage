@@ -66,8 +66,19 @@ jobs:
           export CC=gcc
           export CXX=g++
           export CGO_ENABLED=1
+          export GOTRACEBACK=crash
           cd golang
-          go test -v -timeout 120s
+          # DEBUG (windows branch): isolate the failing TestWebpEncodeLossless
+          # case to capture maximum diagnostic output. -count=1 disables
+          # caching, -p 1 disables package parallelism.
+          echo "=== Step 1: medium-512x512.jpg in isolation ==="
+          go test -v -timeout 120s -count=1 -p 1 -run 'TestWebpEncodeLossless$/medium-512x512.jpg' || echo "EXIT=$?"
+          echo ""
+          echo "=== Step 2: full TestWebpEncodeLossless ==="
+          go test -v -timeout 120s -count=1 -p 1 -run 'TestWebpEncodeLossless$' || echo "EXIT=$?"
+          echo ""
+          echo "=== Step 3: full suite (will likely fail) ==="
+          go test -v -timeout 120s -count=1 -p 1
 
   test-typescript:
     name: TypeScript (${{ matrix.os }})
@@ -181,8 +192,16 @@ jobs:
           CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
           CARGO_DIR=$(dirname "$CARGO_BIN")
           export PATH="$CARGO_DIR:$PATH"
+          export RUST_BACKTRACE=full
           cd rust
-          cargo test --target x86_64-pc-windows-gnu
+          # DEBUG (windows branch): force serial execution and capture
+          # full backtrace so the abort site is visible.
+          echo "=== Step 1: serial run, encode tests only ==="
+          cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1 \
+            test_webp test_avif test_alpha test_compression test_concurrent || echo "EXIT=$?"
+          echo ""
+          echo "=== Step 2: serial run, full suite ==="
+          cargo test --target x86_64-pc-windows-gnu --release -- --test-threads=1 || echo "EXIT=$?"
 
       - name: Build CLI (Unix)
         if: runner.os != 'Windows'
