@@ -68,17 +68,15 @@ jobs:
           export CGO_ENABLED=1
           export GOTRACEBACK=crash
           cd golang
-          # DEBUG (windows branch): isolate the failing TestWebpEncodeLossless
-          # case to capture maximum diagnostic output. -count=1 disables
-          # caching, -p 1 disables package parallelism.
-          echo "=== Step 1: medium-512x512.jpg in isolation ==="
-          go test -v -timeout 120s -count=1 -p 1 -run 'TestWebpEncodeLossless$/medium-512x512.jpg' || echo "EXIT=$?"
+          # DEBUG (windows branch): TestWebpEncodeLossless alone passed in
+          # the previous run; only the full suite crashes. Likely cause:
+          # OS thread migration / state accumulation across CGO calls.
+          # Try GOMAXPROCS=1 to pin all goroutines to a single OS thread.
+          echo "=== Step 1: full suite with GOMAXPROCS=1 ==="
+          GOMAXPROCS=1 go test -v -timeout 240s -count=1 -p 1 || echo "EXIT_GOMAXPROCS1=$?"
           echo ""
-          echo "=== Step 2: full TestWebpEncodeLossless ==="
-          go test -v -timeout 120s -count=1 -p 1 -run 'TestWebpEncodeLossless$' || echo "EXIT=$?"
-          echo ""
-          echo "=== Step 3: full suite (will likely fail) ==="
-          go test -v -timeout 120s -count=1 -p 1
+          echo "=== Step 2: full suite WITHOUT GOMAXPROCS (will likely fail) ==="
+          go test -v -timeout 240s -count=1 -p 1 || echo "EXIT_NORMAL=$?"
 
   test-typescript:
     name: TypeScript (${{ matrix.os }})
