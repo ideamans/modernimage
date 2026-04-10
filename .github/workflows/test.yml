@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [main, develop, windows]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -11,28 +11,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  setup:
-    name: Setup matrix
-    runs-on: ubuntu-latest
-    outputs:
-      os-matrix: ${{ steps.set-matrix.outputs.os-matrix }}
-    steps:
-      - id: set-matrix
-        run: |
-          if [[ "${{ github.ref_name }}" == "windows" ]]; then
-            echo 'os-matrix=["windows-latest"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'os-matrix=["ubuntu-latest","macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
-          fi
-
   test-go:
     name: Go (${{ matrix.os }})
-    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -42,41 +27,17 @@ jobs:
           cache: true
           cache-dependency-path: golang/go.sum
 
-      - name: Setup MSYS2 UCRT64 (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          install: mingw-w64-ucrt-x86_64-gcc
-
-      - name: Run Go tests (Unix)
-        if: runner.os != 'Windows'
+      - name: Run Go tests
         working-directory: golang
         run: go test -v -timeout 120s
 
-      - name: Run Go tests (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          export PATH="/ucrt64/bin:$PATH"
-          # Find go binary installed by setup-go
-          GO_BIN=$(find /c/hostedtoolcache/windows/go -name "go.exe" -path "*/bin/go.exe" 2>/dev/null | head -1)
-          GO_DIR=$(dirname "$GO_BIN")
-          export PATH="$GO_DIR:$PATH"
-          export CC=gcc
-          export CXX=g++
-          export CGO_ENABLED=1
-          cd golang
-          go test -v -timeout 120s
-
   test-typescript:
     name: TypeScript (${{ matrix.os }})
-    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -87,65 +48,29 @@ jobs:
           cache-dependency-path: typescript/package-lock.json
 
       - name: Download libmodernimage shared library
-        shell: bash
         run: ./scripts/setup.sh
 
       - name: Install and build
         working-directory: typescript
-        shell: bash
         run: |
           npm install
           npm run build
 
-      - name: Run tests (Unix)
-        if: runner.os != 'Windows'
+      - name: Run tests
         working-directory: typescript
-        shell: bash
         run: node --test dist/test/*.test.js
-
-      - name: Run tests (Windows)
-        if: runner.os == 'Windows'
-        working-directory: typescript
-        shell: bash
-        run: |
-          node -e "
-            process.on('uncaughtException', (e) => { console.error('UNCAUGHT:', e); process.exit(1); });
-            const { version, webp, avif } = require('./dist/index');
-            const fs = require('fs');
-            const assert = require('assert');
-            const path = require('path');
-            console.log('version:', version());
-
-            const td = '../testdata';
-            const load = (f) => fs.readFileSync(path.join(td, f));
-            const jpegs = ['photo.jpg','photo-like.jpg','landscape-like.jpg','medium-512x512.jpg','edges.jpg','gradient-radial.jpg','small-128x128.jpg'];
-            const pngs = ['logo.png','photo-like.png','text.png','flat-color.png','gradient-horizontal.png','small-128x128.png'];
-            const gifs = ['animation.gif','animated-3frames.gif','animated-small.gif','static-512x512.gif','static-alpha.gif'];
-
-            for (const f of jpegs) { const r = webp.encodeLossy(load(f), 80); assert(r.data.length > 0); console.log('webp.lossy', f, r.data.length); }
-            for (const f of pngs)  { const r = webp.encodeLossy(load(f), 80); assert(r.data.length > 0); console.log('webp.lossy', f, r.data.length); }
-            for (const f of [...jpegs,...pngs]) { const r = webp.encodeLossless(load(f)); assert(r.data.length > 0); console.log('webp.lossless', f, r.data.length); }
-            for (const f of gifs)  { const r = webp.encodeGif(load(f)); assert(r.data.length > 0); console.log('webp.gif', f, r.data.length); }
-            for (const f of [...jpegs,...pngs]) { const r = avif.encodeBalanced(load(f), 80); assert(r.data.length > 0); console.log('avif.balanced', f, r.data.length); }
-            for (const f of ['photo.jpg','small-128x128.jpg','logo.png']) { const r = avif.encodeCompact(load(f), 80); assert(r.data.length > 0); console.log('avif.compact', f, r.data.length); }
-            for (const f of [...jpegs,...pngs]) { const r = avif.encodeFast(load(f), 80); assert(r.data.length > 0); console.log('avif.fast', f, r.data.length); }
-            console.log('All tests passed');
-          "
 
   test-rust:
     name: Rust (${{ matrix.os }})
-    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.os-matrix) }}
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
 
       - name: Cache Cargo registry and build
         uses: actions/cache@v4
@@ -157,45 +82,13 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
 
-      - name: Setup MSYS2 UCRT64 (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          install: mingw-w64-ucrt-x86_64-gcc
-
       - name: Download libmodernimage static library
-        shell: bash
         run: ./scripts/setup.sh
 
-      - name: Run Rust tests (Unix)
-        if: runner.os != 'Windows'
+      - name: Run Rust tests
         working-directory: rust
         run: cargo test
 
-      - name: Run Rust tests (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          export PATH="/ucrt64/bin:$PATH"
-          CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
-          CARGO_DIR=$(dirname "$CARGO_BIN")
-          export PATH="$CARGO_DIR:$PATH"
-          cd rust
-          cargo test --target x86_64-pc-windows-gnu
-
-      - name: Build CLI (Unix)
-        if: runner.os != 'Windows'
+      - name: Build CLI
         working-directory: rust
         run: cargo build --release
-
-      - name: Build CLI (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          export PATH="/ucrt64/bin:$PATH"
-          CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
-          CARGO_DIR=$(dirname "$CARGO_BIN")
-          export PATH="$CARGO_DIR:$PATH"
-          cd rust
-          cargo build --release --target x86_64-pc-windows-gnu

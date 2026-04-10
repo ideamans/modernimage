@@ -10,11 +10,9 @@ package modernimage
 #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/shared/lib/darwin-amd64/libmodernimage.a
 #cgo linux,amd64 LDFLAGS: ${SRCDIR}/shared/lib/linux-amd64/libmodernimage.a
 #cgo linux,arm64 LDFLAGS: ${SRCDIR}/shared/lib/linux-arm64/libmodernimage.a
-#cgo windows,amd64 LDFLAGS: ${SRCDIR}/shared/lib/windows-amd64/libmodernimage.a
 
 #cgo darwin LDFLAGS: -lc++ -lpthread -lm
 #cgo linux LDFLAGS: -lstdc++ -lpthread -lm
-#cgo windows LDFLAGS: -lstdc++ -lws2_32 -lole32 -lshlwapi
 
 #include <stdlib.h>
 #include "modernimage.h"

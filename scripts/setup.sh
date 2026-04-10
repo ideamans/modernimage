@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.3.0}"
+VERSION="${1:-0.3.1}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -20,7 +20,6 @@ detect_release_platform() {
   case "$os" in
     darwin)  os="darwin" ;;
     linux)   os="linux" ;;
-    mingw*|msys*|cygwin*) os="windows" ;;
     *)       echo "Unsupported OS: $os" >&2; exit 1 ;;
   esac
 
@@ -40,10 +39,6 @@ detect_go_platform() {
   local os arch
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
-
-  case "$os" in
-    mingw*|msys*|cygwin*) os="windows" ;;
-  esac
 
   case "$arch" in
     arm64|aarch64) arch="arm64" ;;
@@ -76,9 +71,8 @@ cp "${SRC}/libmodernimage.a" "${PROJECT_DIR}/golang/shared/lib/${GO_PLATFORM}/"
 # TypeScript binding: lib/{go-platform}/ (shared library)
 echo "Installing for TypeScript binding..."
 case "$(uname -s)" in
-  Darwin)              SHARED_LIB="libmodernimage.dylib" ;;
-  MINGW*|MSYS*|CYGWIN*) SHARED_LIB="libmodernimage.dll" ;;
-  *)                   SHARED_LIB="libmodernimage.so" ;;
+  Darwin) SHARED_LIB="libmodernimage.dylib" ;;
+  *)      SHARED_LIB="libmodernimage.so" ;;
 esac
 mkdir -p "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}"
 cp "${SRC}/${SHARED_LIB}" "${PROJECT_DIR}/typescript/lib/${GO_PLATFORM}/"

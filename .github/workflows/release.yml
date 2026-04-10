@@ -19,19 +19,12 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             release_platform: linux-x86_64
-            archive_ext: tar.gz
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             release_platform: linux-aarch64
-            archive_ext: tar.gz
           - target: aarch64-apple-darwin
             os: macos-latest
             release_platform: darwin-arm64
-            archive_ext: tar.gz
-          - target: x86_64-pc-windows-gnu
-            os: windows-latest
-            release_platform: windows-x86_64
-            archive_ext: zip
 
     steps:
       - uses: actions/checkout@v4
@@ -48,51 +41,21 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-      # libmodernimage Windows build uses MSYS2 UCRT64
-      - name: Setup MSYS2 UCRT64 (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          install: mingw-w64-ucrt-x86_64-gcc
-
       - name: Download libmodernimage
-        shell: bash
         run: ./scripts/setup.sh
 
-      - name: Build release binary (Unix)
-        if: runner.os != 'Windows'
+      - name: Build release binary
         working-directory: rust
         run: cargo build --release --target ${{ matrix.target }}
         env:
           MODERNIMAGE_VERSION: ${{ github.ref_name }}
 
-      - name: Build release binary (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          export PATH="/ucrt64/bin:$PATH"
-          CARGO_BIN=$(find /c/Users -name "cargo.exe" -path "*/.cargo/bin/cargo.exe" 2>/dev/null | head -1)
-          export PATH="$(dirname "$CARGO_BIN"):$PATH"
-          cd rust
-          MODERNIMAGE_VERSION=${{ github.ref_name }} cargo build --release --target ${{ matrix.target }}
-
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
+      - name: Package
         run: |
           BINARY="rust/target/${{ matrix.target }}/release/modernimage"
-          ARCHIVE="modernimage-${{ matrix.release_platform }}.${{ matrix.archive_ext }}"
+          ARCHIVE="modernimage-${{ matrix.release_platform }}.tar.gz"
           tar czf "${ARCHIVE}" -C "$(dirname "${BINARY}")" "$(basename "${BINARY}")"
           echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
-
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $binary = "rust/target/${{ matrix.target }}/release/modernimage.exe"
-          $archive = "modernimage-${{ matrix.release_platform }}.${{ matrix.archive_ext }}"
-          Compress-Archive -Path $binary -DestinationPath $archive
-          echo "ARCHIVE=$archive" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

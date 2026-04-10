@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-const LIBMODERNIMAGE_VERSION: &str = "0.3.0";
+const LIBMODERNIMAGE_VERSION: &str = "0.3.1";
 const GITHUB_REPO: &str = "ideamans/libmodernimage";
 
 fn main() {
@@ -100,16 +100,6 @@ fn main() {
             println!("cargo:rustc-link-lib=stdc++");
             println!("cargo:rustc-link-lib=m");
             println!("cargo:rustc-link-lib=pthread");
-        }
-        "windows" => {
-            // MSVC uses msvcrt (no stdc++); MinGW uses stdc++
-            let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-            if target_env == "gnu" {
-                println!("cargo:rustc-link-lib=stdc++");
-            }
-            println!("cargo:rustc-link-lib=ws2_32");
-            println!("cargo:rustc-link-lib=ole32");
-            println!("cargo:rustc-link-lib=shlwapi");
         }
         _ => {}
     }
