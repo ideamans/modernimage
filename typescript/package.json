@@ -1,6 +1,6 @@
 {
   "name": "modernimage",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "TypeScript/Node.js bindings for libmodernimage - WebP and AVIF image encoding",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
