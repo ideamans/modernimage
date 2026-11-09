@@ -113,3 +113,8 @@ Each binding builds CLI arguments programmatically and communicates with the C l
 ## License
 
 MIT
+
+## Releasing (maintainers)
+
+Bump `version` in typescript/package.json, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+GitHub Actions publishes to npm with Trusted Publishing (OIDC); no token is used.
