@@ -2,6 +2,11 @@
   "name": "modernimage",
   "version": "0.3.1",
   "description": "TypeScript/Node.js bindings for libmodernimage - WebP and AVIF image encoding",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ideamans/modernimage.git",
+    "directory": "typescript"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
