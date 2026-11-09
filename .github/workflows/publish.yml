@@ -86,10 +86,10 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: ./scripts/setup.sh
 
-      - name: Install
+      - name: Install (package-lock.json is out of sync; same as test.yml)
         if: steps.check.outputs.skip != 'true'
         working-directory: typescript
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build and test
         if: steps.check.outputs.skip != 'true'
